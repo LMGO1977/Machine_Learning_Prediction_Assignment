@@ -1,0 +1,173 @@
+---
+title: "Machine Learning - Prediction Assignment "
+author: "Luis Oliveira"
+date: "23/08/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Introduction
+This project was made for the Machine Learning course, which is part of the Data Science Specialization.
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here:
+
+http://web.archive.org/web/20161224072740/
+
+http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+
+# 2. Data used in the project
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source:
+http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
+
+
+# 3. Preparing R environment loading libraries needed
+```{r}
+library(lattice)
+library(ggplot2)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(corrplot)
+library(rattle)
+library(randomForest)
+library(RColorBrewer)
+```
+
+# 4. Loading and preparing the dataset
+```{r}
+data_train <- read.csv('pml-training.csv', header=T)
+data_quiz <- read.csv('pml-testing.csv', header=T)
+```
+
+## Dimension of original data
+```{r}
+dim(data_train)
+dim(data_quiz)
+```
+
+## Data partion for estimation and prediction
+```{r}
+in_train  <- createDataPartition(data_train$classe, p=0.75, list=FALSE)
+train_set <- data_train[ in_train, ]
+test_set  <- data_train[-in_train, ]
+
+dim(train_set)
+dim(test_set)
+```
+
+## Cleaning data from NA values
+```{r}
+nzv_var <- nearZeroVar(train_set)
+
+train_set <- train_set[ , -nzv_var]
+test_set  <- test_set [ , -nzv_var]
+```
+
+## Dimension of ajusted data
+```{r}
+dim(train_set)
+dim(test_set)
+```
+
+## Cleaning variables close to NA
+```{r}
+na_var <- sapply(train_set, function(x) mean(is.na(x))) > 0.95
+train_set <- train_set[ , na_var == FALSE]
+test_set  <- test_set [ , na_var == FALSE]
+
+dim(train_set)
+dim(test_set)
+```
+
+## Removing identification variables
+```{r}
+train_set <- train_set[ , -(1:5)]
+test_set  <- test_set [ , -(1:5)]
+
+dim(train_set)
+dim(test_set)
+```
+The number of variables to be used in the analysis was reduced from the 160 to 54.
+
+
+# 5. Prediction Models
+## 5.1. Decision Tree Model
+```{r}
+set.seed(1813)
+fit_decision_tree <- rpart(classe ~ ., data = train_set, method="class")
+fancyRpartPlot(fit_decision_tree)
+
+predict_decision_tree <- predict(fit_decision_tree, newdata = test_set, type="class")
+conf_matrix_decision_tree <- confusionMatrix(predict_decision_tree, test_set$classe)
+conf_matrix_decision_tree
+```
+
+## Decision Tree Model: Predictive Accuracy
+```{r}
+plot(conf_matrix_decision_tree$table, col = conf_matrix_decision_tree$byClass, 
+     main = paste("Decision Tree Model: Predictive Accuracy =",
+                  round(conf_matrix_decision_tree$overall['Accuracy'], 4)))
+```
+
+## 5.2 Generalized Boosted Model (GBM)
+
+```{r}
+set.seed(1813)
+ctrl_GBM <- trainControl(method = "repeatedcv", number = 5, repeats = 2)
+fit_GBM  <- train(classe ~ ., data = train_set, method = "gbm",
+                  trControl = ctrl_GBM, verbose = FALSE)
+fit_GBM$finalModel
+```
+
+```{r}
+predict_GBM <- predict(fit_GBM, newdata = test_set)
+conf_matrix_GBM <- confusionMatrix(predict_GBM, test_set$classe)
+conf_matrix_GBM
+```
+
+Predictive accuracy of the GBM: 98.8%.
+
+# 5.3. Random Forest Model
+```{r}
+set.seed(1813)
+ctrl_RF <- trainControl(method = "repeatedcv", number = 5, repeats = 2)
+fit_RF  <- train(classe ~ ., data = train_set, method = "rf",
+                 trControl = ctrl_RF, verbose = FALSE)
+fit_RF$finalModel
+
+predict_RF <- predict(fit_RF, newdata = test_set)
+conf_matrix_RF <- confusionMatrix(predict_RF, test_set$classe)
+conf_matrix_RF
+```
+
+Predictive accuracy of the Random Forest model: 99.7 %.
+
+# 6. Using the most accurate model to predict the quiz
+
+The best model according to the predictive accuracy is the: Random Forest Model: 99.7%
+
+The other two models have a worst performance:
+
+Generalized Boosted Model: 98.8%
+
+Decision Tree Model: 74.9%
+
+# Answers to the quiz
+The outcome results from the use of the Random Forest model to make predictions on the 20 data points from the original testing dataset.
+
+```{r}
+predict_quiz <- predict(fit_RF, newdata = data_quiz)
+predict_quiz
+```
